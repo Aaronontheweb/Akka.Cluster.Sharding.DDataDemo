@@ -9,7 +9,11 @@ using Petabridge.Cmd.Remote;
 using Microsoft.Extensions.Hosting;
 using System.Threading;
 using System;
+using Akka.Cluster;
+using Akka.Cluster.Sharding;
 using Akka.DependencyInjection;
+using Akka.Util;
+using Petabridge.Cmd.Cluster.Sharding;
 
 namespace Petabridge.App
 {
@@ -28,8 +32,8 @@ namespace Petabridge.App
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-             var config = ConfigurationFactory.ParseString(File.ReadAllText("app.conf")).BootstrapFromDocker();
-             var bootstrap = BootstrapSetup.Create()
+            var config = ConfigurationFactory.ParseString(File.ReadAllText("app.conf")).BootstrapFromDocker();
+            var bootstrap = BootstrapSetup.Create()
                 .WithConfig(config) // load HOCON
                 .WithActorRefProvider(ProviderSelection.Cluster.Instance); // launch Akka.Cluster
 
@@ -48,13 +52,35 @@ namespace Petabridge.App
             var pbm = PetabridgeCmd.Get(ClusterSystem);
             pbm.RegisterCommandPalette(ClusterCommands.Instance);
             pbm.RegisterCommandPalette(new RemoteCommands());
+            pbm.RegisterCommandPalette(ClusterShardingCommands.Instance);
             pbm.Start(); // begin listening for PBM management commands
 
             // instantiate actors
 
             // use the ServiceProvider ActorSystem Extension to start DI'd actors
             var sp = DependencyResolver.For(ClusterSystem);
-            
+
+            var sharding = ClusterSharding.Get(ClusterSystem);
+            var shardRegion = sharding.Start("entity", s => Props.Create<EntityActor>(s),
+                ClusterShardingSettings.Create(ClusterSystem),
+                new EntityRouter(100));
+
+            var cluster = Cluster.Get(ClusterSystem);
+            cluster.Join(cluster.SelfAddress);
+
+            Cluster.Get(ClusterSystem).RegisterOnMemberUp(() =>
+            {
+                ClusterSystem.Scheduler.Advanced.ScheduleRepeatedly(TimeSpan.FromMilliseconds(100),
+                    TimeSpan.FromMilliseconds(100),
+                    () =>
+                    {
+                        for (var i = 0; i < 25; i++)
+                        {
+                            //shardRegion.Tell(new EntityCmd(ThreadLocalRandom.Current.Next().ToString()));
+                        }
+                    });
+            });
+
             return Task.CompletedTask;
         }
 
@@ -62,8 +88,7 @@ namespace Petabridge.App
         {
             // strictly speaking this may not be necessary - terminating the ActorSystem would also work
             // but this call guarantees that the shutdown of the cluster is graceful regardless
-             await CoordinatedShutdown.Get(ClusterSystem).Run(CoordinatedShutdown.ClrExitReason.Instance);
+            await CoordinatedShutdown.Get(ClusterSystem).Run(CoordinatedShutdown.ClrExitReason.Instance);
         }
     }
-   
 }
