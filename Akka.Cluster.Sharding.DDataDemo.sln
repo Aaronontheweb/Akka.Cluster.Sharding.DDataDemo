@@ -9,6 +9,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{79D71264
 		build.fsx = build.fsx
 		build.ps1 = build.ps1
 		build.sh = build.sh
+		src\common.props = src\common.props
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akka.Cluster.Sharding.DDataDemo", "src\Akka.Cluster.Sharding.DDataDemo\Akka.Cluster.Sharding.DDataDemo.csproj", "{B813208B-37DF-4E20-A872-13C93B032C7C}"

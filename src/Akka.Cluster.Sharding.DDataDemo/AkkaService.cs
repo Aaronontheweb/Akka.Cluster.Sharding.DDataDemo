@@ -76,7 +76,7 @@ namespace Petabridge.App
                     {
                         for (var i = 0; i < 25; i++)
                         {
-                            //shardRegion.Tell(new EntityCmd(ThreadLocalRandom.Current.Next().ToString()));
+                            shardRegion.Tell(new EntityCmd(ThreadLocalRandom.Current.Next().ToString()));
                         }
                     });
             });
