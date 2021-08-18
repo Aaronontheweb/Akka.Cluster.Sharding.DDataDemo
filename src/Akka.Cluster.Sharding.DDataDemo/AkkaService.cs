@@ -44,7 +44,9 @@ namespace Petabridge.App
 
 
             var phobosSetup = PhobosSetup.Create(new PhobosConfigBuilder()
-                .WithTracing(t => t.SetTracer(_tracer))); // binds Phobos to same tracer as ASP.NET Core
+                .WithTracing(t => t.SetTracer(_tracer)
+                    .IncludeMessagesAlreadyInTrace(true)
+                    .AddIncludeMessageFilter<IWithEntityId>())); // binds Phobos to same tracer as ASP.NET Core
 
             // N.B. `WithActorRefProvider` isn't actually needed here - the HOCON file already specifies Akka.Cluster
 
@@ -73,9 +75,6 @@ namespace Petabridge.App
             var shardRegion = sharding.Start("entity", s => Props.Create<EntityActor>(s),
                 ClusterShardingSettings.Create(ClusterSystem),
                 new EntityRouter(100));
-
-            var cluster = Cluster.Get(ClusterSystem);
-            cluster.Join(cluster.SelfAddress);
 
             Cluster.Get(ClusterSystem).RegisterOnMemberUp(() =>
             {

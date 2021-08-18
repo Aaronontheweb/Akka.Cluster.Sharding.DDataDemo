@@ -85,7 +85,7 @@ namespace Petabridge.App
                 })
                 .ConfigureLogging((hostContext, configLogging) =>
                 {
-                    configLogging.AddConsole();W
+                    configLogging.AddConsole();
                 })
                 .UseConsoleLifetime()
                 .Build();
