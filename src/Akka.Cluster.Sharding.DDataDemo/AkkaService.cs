@@ -13,7 +13,10 @@ using Akka.Cluster;
 using Akka.Cluster.Sharding;
 using Akka.DependencyInjection;
 using Akka.Util;
+using OpenTracing;
 using Petabridge.Cmd.Cluster.Sharding;
+using Phobos.Actor;
+using Phobos.Actor.Configuration;
 
 namespace Petabridge.App
 {
@@ -24,10 +27,12 @@ namespace Petabridge.App
     {
         private ActorSystem ClusterSystem;
         private readonly IServiceProvider _serviceProvider;
+        private readonly ITracer _tracer;
 
-        public AkkaService(IServiceProvider serviceProvider)
+        public AkkaService(IServiceProvider serviceProvider, ITracer tracer)
         {
             _serviceProvider = serviceProvider;
+            _tracer = tracer;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -35,7 +40,11 @@ namespace Petabridge.App
             var config = ConfigurationFactory.ParseString(File.ReadAllText("app.conf")).BootstrapFromDocker();
             var bootstrap = BootstrapSetup.Create()
                 .WithConfig(config) // load HOCON
-                .WithActorRefProvider(ProviderSelection.Cluster.Instance); // launch Akka.Cluster
+                .WithActorRefProvider(PhobosProviderSelection.Cluster); // launch Akka.Cluster
+
+
+            var phobosSetup = PhobosSetup.Create(new PhobosConfigBuilder()
+                .WithTracing(t => t.SetTracer(_tracer))); // binds Phobos to same tracer as ASP.NET Core
 
             // N.B. `WithActorRefProvider` isn't actually needed here - the HOCON file already specifies Akka.Cluster
 
@@ -43,7 +52,7 @@ namespace Petabridge.App
             var diSetup = DependencyResolverSetup.Create(_serviceProvider);
 
             // merge this setup (and any others) together into ActorSystemSetup
-            var actorSystemSetup = bootstrap.And(diSetup);
+            var actorSystemSetup = phobosSetup.And(bootstrap).And(diSetup);
 
             // start ActorSystem
             ClusterSystem = ActorSystem.Create("ClusterSys", actorSystemSetup);
@@ -70,13 +79,13 @@ namespace Petabridge.App
 
             Cluster.Get(ClusterSystem).RegisterOnMemberUp(() =>
             {
-                ClusterSystem.Scheduler.Advanced.ScheduleRepeatedly(TimeSpan.FromMilliseconds(100),
-                    TimeSpan.FromMilliseconds(100),
+                ClusterSystem.Scheduler.Advanced.ScheduleRepeatedly(TimeSpan.FromSeconds(10),
+                    TimeSpan.FromSeconds(10),
                     () =>
                     {
                         for (var i = 0; i < 25; i++)
                         {
-                            shardRegion.Tell(new EntityCmd(ThreadLocalRandom.Current.Next().ToString()));
+                            shardRegion.Tell(new EntityCmd(i.ToString()));
                         }
                     });
             });
